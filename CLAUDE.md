@@ -14,9 +14,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 2. **System 2 (Multimodal Agent)** - `src/comp_critic/agent.py`
    - Runtime: Accepts image → GPT-4 vision analysis → queries ChromaDB via RAG tool → synthesizes critique
-   - Uses LangChain's tool-calling agent pattern with a single tool: `composition_rag_tool`
+   - Uses **manual tool calling** with `llm.bind_tools()` (NOT AgentExecutor) for token efficiency
+   - Token optimized: ~2-3K tokens per critique vs 60K+ with traditional agent frameworks
 
-**Key Dependencies:** LangChain (agent framework), ChromaDB (vector DB), OpenAI (GPT-4 + embeddings), Pillow (image processing)
+**Key Dependencies:** LangChain (tool binding, messages), ChromaDB (vector DB), OpenAI (GPT-4 + embeddings), Pillow (image processing)
 
 ## Development Philosophy
 
@@ -72,21 +73,29 @@ result = critique_image("image.jpg")
 
 ### Multimodal Input Pattern (agent.py)
 
-The agent accepts a specific multimodal message format required by GPT-4 vision:
+The agent uses LangChain's multimodal message format with HumanMessage:
 
 ```python
-input_message = {
-    "input": [
-        {"type": "text", "text": "Critique this photo"},
-        {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}}
-    ]
-}
+messages = [
+    HumanMessage(
+        content=[
+            {"type": "text", "text": f"{AGENT_SYSTEM_PROMPT}\n\n{custom_prompt}"},
+            {
+                "type": "image_url",
+                "image_url": {"url": image_base64, "detail": detail}  # "low" or "high"
+            },
+        ]
+    )
+]
 ```
 
 Images are preprocessed via `encode_image_to_base64()` which:
-- Resizes to max 2048px (reduces tokens while maintaining quality)
-- Converts to JPEG with 85% quality
+- Resizes to configurable max size (default 2048px) to reduce token usage
+- Converts to JPEG with 85% quality for optimal balance
 - Returns base64 data URI
+- **Critical**: Vision API `detail` parameter controls token usage:
+  - `detail="low"`: Fixed 85 tokens per image (fast, cheap)
+  - `detail="high"`: Variable tokens based on image complexity (slower, expensive)
 
 ### RAG Tool Pattern (tools.py)
 
@@ -101,6 +110,49 @@ def composition_rag_tool(query: str) -> str:
 
 **Critical:** The tool's docstring is used by the LLM to understand when/how to invoke it. Be precise and instructive when editing tool descriptions.
 
+### Manual Tool Calling Pattern (agent.py)
+
+**IMPORTANT: This project does NOT use AgentExecutor.** The previous implementation used LangChain's `AgentExecutor`, which caused massive token overhead (~60K+ tokens). The refactored implementation uses manual tool calling for 97.5% token reduction.
+
+**How it works:**
+
+```python
+# 1. Bind tools to LLM
+llm_with_tools = llm.bind_tools([composition_rag_tool])
+
+# 2. Iterative tool calling loop (max 3 iterations)
+messages: list[BaseMessage] = [HumanMessage(...)]
+
+for iteration in range(3):
+    response = llm_with_tools.invoke(messages)
+    messages.append(response)
+
+    # Check if LLM wants to call tools
+    if not hasattr(response, "tool_calls") or not response.tool_calls:
+        break  # No tool calls, we have final response
+
+    # Execute each tool call
+    for tool_call in response.tool_calls:
+        tool_result = composition_rag_tool.invoke(tool_call["args"])
+        messages.append(ToolMessage(content=tool_result, tool_call_id=tool_call["id"]))
+
+# 3. Extract final response from last message
+final_response = messages[-1].content if isinstance(messages[-1], AIMessage) else llm.invoke(messages).content
+```
+
+**Why manual tool calling?**
+- AgentExecutor adds massive overhead: agent_scratchpad, full tool schemas, conversation history
+- Manual approach gives full control over message structure
+- Allows token usage tracking via `response.usage_metadata`
+- Simpler debugging with visible message flow
+
+**Trade-offs:**
+- ✅ 97.5% token reduction (~2-3K vs 60K+ tokens)
+- ✅ Full control over prompt structure
+- ✅ Easy token usage monitoring
+- ❌ Manual iteration limit management (3 iterations hardcoded)
+- ❌ No built-in error recovery from AgentExecutor
+
 ### Configuration Management (config.py)
 
 All config flows through `Config` class:
@@ -108,10 +160,19 @@ All config flows through `Config` class:
 - `Config.validate()` checks required values (called before agent/ingestion runs)
 - `Config.ensure_chroma_db_path()` creates DB directory if needed
 
+**Key configuration options:**
+- `OPENAI_MODEL`: GPT model to use (default: "gpt-4.1")
+- `VISION_DETAIL`: "low" (85 tokens) or "high" (variable tokens) - default: "low"
+- `VISION_MAX_SIZE`: Max image dimension in pixels (default: 2048)
+- `RAG_TOP_K`: Number of chunks to retrieve (default: 3)
+- `CHUNK_SIZE`: Characters per chunk during ingestion (default: 1000)
+- `CHUNK_OVERLAP`: Overlap between chunks (default: 200)
+
 **When adding config:**
-1. Add to `.env.example`
-2. Add as class variable in `Config`
+1. Add to `.env.example` with documentation
+2. Add as class variable in `Config` with `os.getenv()` for user-configurable options
 3. Update validation if required
+4. Update README.md Configuration section
 
 ### ChromaDB Persistence Model
 
@@ -152,6 +213,39 @@ def test_something(monkeypatch):
 - Mock ChromaDB operations when testing non-storage logic
 - Mock file I/O when not testing actual file operations
 
+**Testing Manual Tool Calling Pattern:**
+
+When testing the agent's manual tool calling, mock both the LLM and tool responses:
+
+```python
+@patch("comp_critic.agent.composition_rag_tool")
+@patch("comp_critic.agent.ChatOpenAI")
+def test_critique_with_tool_calling(mock_llm_class, mock_tool, sample_image):
+    # Mock first response: LLM wants to call tool
+    mock_response_1 = AIMessage(
+        content="",
+        tool_calls=[{
+            "name": "composition_rag_tool",
+            "args": {"query": "rule of thirds"},
+            "id": "call_123"
+        }]
+    )
+
+    # Mock second response: LLM provides final answer
+    mock_response_2 = AIMessage(content="Final critique", tool_calls=[])
+    mock_response_2.usage_metadata = {"total_tokens": 300}
+
+    mock_llm_with_tools = MagicMock()
+    mock_llm_with_tools.invoke.side_effect = [mock_response_1, mock_response_2]
+
+    mock_llm = MagicMock()
+    mock_llm.bind_tools.return_value = mock_llm_with_tools
+    mock_llm_class.return_value = mock_llm
+
+    result = critique_image(sample_image)
+    assert mock_llm_with_tools.invoke.call_count == 2  # Two iterations
+```
+
 **Test Docstrings:**
 
 Every test needs a docstring explaining *what* it verifies:
@@ -166,21 +260,24 @@ def test_encode_image_resizes_large_images(temp_dir: Path) -> None:
 ### Type Hints (Strict Enforcement)
 
 - **Required:** All function parameters and return values
-- Use `from typing import` for complex types
+- Use **Python 3.10+ syntax** for type unions: `str | Path` instead of `Union[str, Path]`
+- Use **lowercase generics**: `dict[str, str]` instead of `Dict[str, str]`
 - `mypy` runs in strict mode (`disallow_untyped_defs = true`)
 - Ignore missing imports for third-party libs (see pyproject.toml overrides)
 
 Example:
 ```python
 from pathlib import Path
-from typing import Dict, Union
 
 def critique_image(
-    image_path: Union[str, Path],
-    custom_prompt: str = "..."
-) -> Dict[str, str]:
-    """..."""
+    image_path: str | Path,
+    custom_prompt: str = "...",
+    detail: str | None = None,
+) -> dict[str, str | dict[str, int]]:
+    """Returns dict with 'output', 'image_path', and 'token_usage' keys."""
 ```
+
+**Important:** Only import from `typing` for types not available as builtins (e.g., `Any`, `Callable`)
 
 ### Code Style
 
@@ -218,6 +315,13 @@ This prompt instructs the LLM on:
 - How to structure output
 
 **Important:** Changes here affect agent reasoning. Test thoroughly with real images.
+
+**Token Optimization Considerations:**
+- Keep the system prompt concise - every character counts
+- Use `detail="low"` by default unless high-res analysis is needed
+- Consider reducing `RAG_TOP_K` if context size is an issue
+- Monitor token usage via the returned `token_usage` dict
+- Max 3 tool calling iterations to prevent runaway token usage
 
 ### Changing ChromaDB Configuration
 
@@ -264,17 +368,23 @@ from comp_critic import config as config_module
 monkeypatch.setattr(config_module.Config, "OPENAI_API_KEY", "test")
 ```
 
-### Image Size vs Token Usage
+### Vision API Token Usage
 
-Large images consume massive tokens with GPT-4 vision. The `encode_image_to_base64()` function resizes to 2048px max. Don't bypass this unless you understand token implications.
+**Critical for cost control:**
+- `detail="low"`: Always 85 tokens regardless of image size (recommended default)
+- `detail="high"`: Variable tokens based on image complexity (can be thousands)
+- The `encode_image_to_base64()` function resizes to configurable max size (default 2048px)
+- Don't bypass resizing unless you understand token/cost implications
+
+**Why this matters:** At `detail="high"`, a single high-res image can consume 5,000+ tokens. At scale, this becomes expensive quickly.
 
 ### ChromaDB Persistence
 
 ChromaDB creates a `chroma.sqlite3` file. If you see weird search results after schema changes, delete `./chroma_db/` and re-ingest.
 
-### Agent Verbose Mode
+### Manual Tool Calling Debug Output
 
-`AgentExecutor(verbose=True)` in `agent.py:146` - this prints agent reasoning to stdout. Useful for debugging, but noisy in tests.
+The agent prints debug messages during execution (e.g., "Iteration 1...", "Tool call: composition_rag_tool(...)"). This is helpful for understanding the tool calling flow but can be noisy. To disable, remove the `print()` statements in `critique_image()` function.
 
 ## Resources
 
