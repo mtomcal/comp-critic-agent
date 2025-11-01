@@ -58,6 +58,112 @@ class TestEncodeImageToBase64:
         assert isinstance(result, str)
         assert result.startswith("data:image/jpeg;base64,")
 
+    def test_encode_image_resizes_large_images(self, temp_dir: Path) -> None:
+        """Test that large images are resized to reduce token usage."""
+        # Arrange
+        from PIL import Image
+
+        large_image_path = temp_dir / "large_image.jpg"
+        # Create a large 4000x3000 image (typical high-res landscape)
+        img = Image.new("RGB", (4000, 3000), color=(100, 150, 200))
+        img.save(large_image_path, format="JPEG")
+
+        # Act
+        result = encode_image_to_base64(large_image_path, max_size=2048)
+
+        # Assert
+        assert isinstance(result, str)
+        assert result.startswith("data:image/jpeg;base64,")
+
+        # Verify the image was resized by checking it's smaller than original
+        # Decode and check dimensions
+        import base64
+        from io import BytesIO
+
+        base64_data = result.split(",")[1]
+        img_bytes = base64.b64decode(base64_data)
+        resized_img = Image.open(BytesIO(img_bytes))
+
+        # Should be resized to max_size on longest dimension
+        assert max(resized_img.size) == 2048
+        assert resized_img.size == (2048, 1536)  # Maintains 4:3 aspect ratio
+
+    def test_encode_image_preserves_small_images(self, temp_dir: Path) -> None:
+        """Test that small images are not upscaled."""
+        # Arrange
+        from PIL import Image
+
+        small_image_path = temp_dir / "small_image.jpg"
+        img = Image.new("RGB", (800, 600), color=(100, 150, 200))
+        img.save(small_image_path, format="JPEG")
+
+        # Act
+        result = encode_image_to_base64(small_image_path, max_size=2048)
+
+        # Assert
+        assert isinstance(result, str)
+
+        # Verify dimensions were not changed
+        import base64
+        from io import BytesIO
+
+        base64_data = result.split(",")[1]
+        img_bytes = base64.b64decode(base64_data)
+        processed_img = Image.open(BytesIO(img_bytes))
+
+        # Should remain the same size (or very close due to JPEG compression)
+        assert processed_img.size == (800, 600)
+
+    def test_encode_image_maintains_aspect_ratio_portrait(
+        self, temp_dir: Path
+    ) -> None:
+        """Test that portrait images maintain aspect ratio when resized."""
+        # Arrange
+        from PIL import Image
+
+        portrait_image_path = temp_dir / "portrait_image.jpg"
+        # Create a tall portrait image (3000x4000)
+        img = Image.new("RGB", (3000, 4000), color=(100, 150, 200))
+        img.save(portrait_image_path, format="JPEG")
+
+        # Act
+        result = encode_image_to_base64(portrait_image_path, max_size=2048)
+
+        # Assert
+        import base64
+        from io import BytesIO
+
+        base64_data = result.split(",")[1]
+        img_bytes = base64.b64decode(base64_data)
+        resized_img = Image.open(BytesIO(img_bytes))
+
+        # Should be resized to 1536x2048 (maintains 3:4 aspect ratio)
+        assert resized_img.size == (1536, 2048)
+        assert max(resized_img.size) == 2048
+
+    def test_encode_image_custom_max_size(self, temp_dir: Path) -> None:
+        """Test that custom max_size parameter works correctly."""
+        # Arrange
+        from PIL import Image
+
+        large_image_path = temp_dir / "large_image.jpg"
+        img = Image.new("RGB", (3000, 2000), color=(100, 150, 200))
+        img.save(large_image_path, format="JPEG")
+
+        # Act
+        result = encode_image_to_base64(large_image_path, max_size=1024)
+
+        # Assert
+        import base64
+        from io import BytesIO
+
+        base64_data = result.split(",")[1]
+        img_bytes = base64.b64decode(base64_data)
+        resized_img = Image.open(BytesIO(img_bytes))
+
+        # Should be resized to 1024 on longest dimension
+        assert max(resized_img.size) == 1024
+
 
 class TestCreateCritiqueAgent:
     """Tests for create_critique_agent function."""
@@ -81,7 +187,7 @@ class TestCreateCritiqueAgent:
 
         # Verify LLM was initialized with correct parameters
         call_kwargs = mock_llm_class.call_args.kwargs
-        assert call_kwargs["model"] == "gpt-4o"
+        assert call_kwargs["model"] == "gpt-4.1"
         assert call_kwargs["openai_api_key"] == mock_openai_api_key
         assert call_kwargs["temperature"] == 0.7
 

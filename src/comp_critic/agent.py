@@ -52,12 +52,17 @@ AGENT_SYSTEM_PROMPT = """You are an expert landscape photography composition cri
 Your critique should be well-structured, professional, and educational."""
 
 
-def encode_image_to_base64(image_path: Union[str, Path]) -> str:
+def encode_image_to_base64(image_path: Union[str, Path], max_size: int = 2048) -> str:
     """
     Encode an image file to a base64 data URI for multimodal LLM input.
 
+    Resizes large images to reduce token usage while maintaining quality
+    for visual analysis. Images are resized to fit within max_size while
+    maintaining aspect ratio.
+
     Args:
         image_path: Path to the image file
+        max_size: Maximum dimension (width or height) in pixels (default: 2048)
 
     Returns:
         Base64-encoded data URI string
@@ -75,9 +80,23 @@ def encode_image_to_base64(image_path: Union[str, Path]) -> str:
     if image.mode != "RGB":
         image = image.convert("RGB")
 
-    # Encode to base64
+    # Resize image if it's too large to avoid token limits
+    # This significantly reduces token usage while maintaining visual quality
+    width, height = image.size
+    if max(width, height) > max_size:
+        # Calculate new dimensions maintaining aspect ratio
+        if width > height:
+            new_width = max_size
+            new_height = int((max_size / width) * height)
+        else:
+            new_height = max_size
+            new_width = int((max_size / height) * width)
+
+        image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+    # Encode to base64 with quality optimization
     buffered = BytesIO()
-    image.save(buffered, format="JPEG")
+    image.save(buffered, format="JPEG", quality=85, optimize=True)
     img_bytes = buffered.getvalue()
     img_base64 = base64.b64encode(img_bytes).decode("utf-8")
 
