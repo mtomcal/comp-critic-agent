@@ -1,7 +1,5 @@
 """RAG tool for searching landscape photography video transcripts."""
 
-from typing import List
-
 from langchain.tools import tool
 from langchain_community.vectorstores import Chroma
 from langchain_core.documents import Document
@@ -28,7 +26,7 @@ def load_vector_store() -> Chroma:
 
     embeddings = OpenAIEmbeddings(
         model=config.EMBEDDING_MODEL,
-        openai_api_key=config.OPENAI_API_KEY,
+        openai_api_key=config.OPENAI_API_KEY,  # type: ignore[call-arg]
     )
 
     vector_store = Chroma(
@@ -40,7 +38,7 @@ def load_vector_store() -> Chroma:
     return vector_store
 
 
-def format_search_results(documents: List[Document]) -> str:
+def format_search_results(documents: list[Document]) -> str:
     """
     Format retrieved documents into a readable string.
 
@@ -57,9 +55,7 @@ def format_search_results(documents: List[Document]) -> str:
     for i, doc in enumerate(documents, 1):
         source = doc.metadata.get("source", "Unknown")
         content = doc.page_content.strip()
-        formatted_results.append(
-            f"--- Result {i} (Source: {source}) ---\n{content}\n"
-        )
+        formatted_results.append(f"--- Result {i} (Source: {source}) ---\n{content}\n")
 
     return "\n".join(formatted_results)
 

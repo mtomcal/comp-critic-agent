@@ -2,7 +2,6 @@
 
 import sys
 from pathlib import Path
-from typing import List
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
@@ -13,7 +12,7 @@ from langchain_openai import OpenAIEmbeddings
 from comp_critic.config import config
 
 
-def load_transcripts(transcripts_dir: Path) -> List[Document]:
+def load_transcripts(transcripts_dir: Path) -> list[Document]:
     """
     Load all .txt transcript files from the specified directory.
 
@@ -42,7 +41,7 @@ def load_transcripts(transcripts_dir: Path) -> List[Document]:
     return documents
 
 
-def chunk_documents(documents: List[Document]) -> List[Document]:
+def chunk_documents(documents: list[Document]) -> list[Document]:
     """
     Split documents into smaller, overlapping chunks for better retrieval.
 
@@ -52,9 +51,7 @@ def chunk_documents(documents: List[Document]) -> List[Document]:
     Returns:
         List of chunked Document objects
     """
-    print(
-        f"Chunking documents (size={config.CHUNK_SIZE}, overlap={config.CHUNK_OVERLAP})"
-    )
+    print(f"Chunking documents (size={config.CHUNK_SIZE}, overlap={config.CHUNK_OVERLAP})")
 
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=config.CHUNK_SIZE,
@@ -69,7 +66,7 @@ def chunk_documents(documents: List[Document]) -> List[Document]:
     return chunks
 
 
-def create_vector_store(chunks: List[Document]) -> Chroma:
+def create_vector_store(chunks: list[Document]) -> Chroma:
     """
     Create and persist a ChromaDB vector store with embedded document chunks.
 
@@ -84,7 +81,7 @@ def create_vector_store(chunks: List[Document]) -> Chroma:
     # Initialize OpenAI embeddings
     embeddings = OpenAIEmbeddings(
         model=config.EMBEDDING_MODEL,
-        openai_api_key=config.OPENAI_API_KEY,
+        openai_api_key=config.OPENAI_API_KEY,  # type: ignore[call-arg]
     )
 
     # Ensure the ChromaDB directory exists
@@ -133,7 +130,7 @@ def run_ingestion_pipeline() -> None:
         chunks = chunk_documents(documents)
 
         # Step 3: Create and persist vector store
-        vector_store = create_vector_store(chunks)
+        create_vector_store(chunks)
 
         print("=" * 60)
         print("Ingestion pipeline completed successfully!")

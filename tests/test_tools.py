@@ -1,7 +1,6 @@
 """Unit tests for the RAG tool."""
 
 from pathlib import Path
-from typing import List
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -57,9 +56,7 @@ class TestLoadVectorStore:
 class TestFormatSearchResults:
     """Tests for format_search_results function."""
 
-    def test_format_search_results_with_documents(
-        self, sample_documents: List[Document]
-    ) -> None:
+    def test_format_search_results_with_documents(self, sample_documents: list[Document]) -> None:
         """Test formatting multiple search results."""
         # Act
         result = format_search_results(sample_documents)
@@ -77,7 +74,7 @@ class TestFormatSearchResults:
     def test_format_search_results_empty_list(self) -> None:
         """Test formatting with no results."""
         # Arrange
-        empty_docs: List[Document] = []
+        empty_docs: list[Document] = []
 
         # Act
         result = format_search_results(empty_docs)
@@ -120,10 +117,12 @@ class TestCompositionRAGTool:
 
     @patch("comp_critic.tools.load_vector_store")
     def test_composition_rag_tool_success(
-        self, mock_load: MagicMock, sample_documents: List[Document]
+        self, mock_load: MagicMock, sample_documents: list[Document]
     ) -> None:
         """Test successful RAG tool execution."""
         # Arrange
+        from comp_critic.config import config
+
         mock_vector_store = MagicMock()
         mock_vector_store.similarity_search.return_value = sample_documents[:2]
         mock_load.return_value = mock_vector_store
@@ -135,9 +134,9 @@ class TestCompositionRAGTool:
         assert isinstance(result, str)
         assert len(result) > 0
         mock_load.assert_called_once()
-        mock_vector_store.similarity_search.assert_called_once_with(
-            "rule of thirds", k=3
-        )
+        # Use the actual config value for k
+        expected_k = config.RAG_TOP_K
+        mock_vector_store.similarity_search.assert_called_once_with("rule of thirds", k=expected_k)
 
     @patch("comp_critic.tools.load_vector_store")
     def test_composition_rag_tool_no_results(self, mock_load: MagicMock) -> None:
@@ -154,9 +153,7 @@ class TestCompositionRAGTool:
         assert "No relevant advice found" in result
 
     @patch("comp_critic.tools.load_vector_store")
-    def test_composition_rag_tool_handles_errors(
-        self, mock_load: MagicMock
-    ) -> None:
+    def test_composition_rag_tool_handles_errors(self, mock_load: MagicMock) -> None:
         """Test RAG tool error handling."""
         # Arrange
         mock_load.side_effect = Exception("Database connection failed")
@@ -180,7 +177,7 @@ class TestCompositionRAGTool:
     def test_composition_rag_tool_parametrized_queries(
         self,
         mock_load: MagicMock,
-        sample_documents: List[Document],
+        sample_documents: list[Document],
         query: str,
         expected_in_result: str,
     ) -> None:
@@ -207,10 +204,12 @@ class TestCompositionRAGTool:
 
     @patch("comp_critic.tools.load_vector_store")
     def test_composition_rag_tool_respects_top_k(
-        self, mock_load: MagicMock, sample_documents: List[Document]
+        self, mock_load: MagicMock, sample_documents: list[Document]
     ) -> None:
         """Test that RAG tool respects the configured top_k value."""
         # Arrange
+        from comp_critic.config import config
+
         mock_vector_store = MagicMock()
         mock_vector_store.similarity_search.return_value = sample_documents[:3]
         mock_load.return_value = mock_vector_store
@@ -219,9 +218,9 @@ class TestCompositionRAGTool:
         composition_rag_tool.invoke({"query": "test"})
 
         # Assert
-        # Verify that similarity_search was called with k=3 (from config)
+        # Verify that similarity_search was called with k from config
         call_kwargs = mock_vector_store.similarity_search.call_args.kwargs
-        assert call_kwargs["k"] == 3
+        assert call_kwargs["k"] == config.RAG_TOP_K
 
 
 class TestToolIntegration:
@@ -236,7 +235,7 @@ class TestToolIntegration:
         mock_chroma: MagicMock,
         mock_openai_api_key: str,
         mock_chroma_db_path: Path,
-        sample_documents: List[Document],
+        sample_documents: list[Document],
     ) -> None:
         """Test the complete workflow from loading to searching."""
         # Arrange

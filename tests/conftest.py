@@ -1,8 +1,8 @@
 """Pytest configuration and shared fixtures for Comp Critic Agent tests."""
 
 import tempfile
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator, List
 
 import pytest
 from langchain_core.documents import Document
@@ -48,7 +48,7 @@ def sample_transcripts_dir(temp_dir: Path) -> Path:
 
 
 @pytest.fixture
-def sample_documents() -> List[Document]:
+def sample_documents() -> list[Document]:
     """Return a list of sample Document objects for testing."""
     return [
         Document(
@@ -71,7 +71,7 @@ def sample_documents() -> List[Document]:
 
 
 @pytest.fixture
-def sample_chunks() -> List[Document]:
+def sample_chunks() -> list[Document]:
     """Return a list of sample chunked Document objects."""
     return [
         Document(
@@ -97,6 +97,7 @@ def mock_openai_api_key(monkeypatch: pytest.MonkeyPatch) -> str:
 
     # Also patch the Config class attribute since it's read at import time
     from comp_critic import config as config_module
+
     monkeypatch.setattr(config_module.Config, "OPENAI_API_KEY", api_key)
 
     return api_key
@@ -131,14 +132,10 @@ def mock_chroma_db_path(temp_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Path
 
 
 @pytest.fixture
-def mock_transcripts_dir(
-    sample_transcripts_dir: Path, monkeypatch: pytest.MonkeyPatch
-) -> Path:
+def mock_transcripts_dir(sample_transcripts_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Mock the transcripts directory in config."""
     from comp_critic import config as config_module
 
-    monkeypatch.setattr(
-        config_module.Config, "TRANSCRIPTS_DIR", sample_transcripts_dir
-    )
+    monkeypatch.setattr(config_module.Config, "TRANSCRIPTS_DIR", sample_transcripts_dir)
 
     return sample_transcripts_dir

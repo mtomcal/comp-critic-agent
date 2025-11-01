@@ -1,7 +1,6 @@
 """Unit tests for the data ingestion pipeline (System 1)."""
 
 from pathlib import Path
-from typing import List
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -18,9 +17,7 @@ from comp_critic.ingest import (
 class TestLoadTranscripts:
     """Tests for load_transcripts function."""
 
-    def test_load_transcripts_success(
-        self, mock_transcripts_dir: Path
-    ) -> None:
+    def test_load_transcripts_success(self, mock_transcripts_dir: Path) -> None:
         """Test loading transcripts from a valid directory."""
         # Arrange - mock_transcripts_dir fixture provides sample files
 
@@ -57,7 +54,7 @@ class TestLoadTranscripts:
 class TestChunkDocuments:
     """Tests for chunk_documents function."""
 
-    def test_chunk_documents_basic(self, sample_documents: List[Document]) -> None:
+    def test_chunk_documents_basic(self, sample_documents: list[Document]) -> None:
         """Test chunking documents with default settings."""
         # Act
         chunks = chunk_documents(sample_documents)
@@ -68,9 +65,7 @@ class TestChunkDocuments:
         # Should have at least as many chunks as documents (could be more if split)
         assert len(chunks) >= len(sample_documents)
 
-    def test_chunk_documents_preserves_metadata(
-        self, sample_documents: List[Document]
-    ) -> None:
+    def test_chunk_documents_preserves_metadata(self, sample_documents: list[Document]) -> None:
         """Test that chunking preserves source metadata."""
         # Act
         chunks = chunk_documents(sample_documents)
@@ -83,7 +78,7 @@ class TestChunkDocuments:
     def test_chunk_documents_empty_list(self) -> None:
         """Test chunking an empty list returns empty list."""
         # Arrange
-        empty_docs: List[Document] = []
+        empty_docs: list[Document] = []
 
         # Act
         chunks = chunk_documents(empty_docs)
@@ -120,7 +115,7 @@ class TestCreateVectorStore:
         self,
         mock_embeddings: MagicMock,
         mock_chroma: MagicMock,
-        sample_chunks: List[Document],
+        sample_chunks: list[Document],
         mock_openai_api_key: str,
         mock_chroma_db_path: Path,
     ) -> None:
@@ -149,7 +144,7 @@ class TestCreateVectorStore:
         self,
         mock_embeddings: MagicMock,
         mock_chroma: MagicMock,
-        sample_chunks: List[Document],
+        sample_chunks: list[Document],
         mock_openai_api_key: str,
         temp_dir: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -182,8 +177,8 @@ class TestRunIngestionPipeline:
         mock_load: MagicMock,
         mock_chunk: MagicMock,
         mock_create: MagicMock,
-        sample_documents: List[Document],
-        sample_chunks: List[Document],
+        sample_documents: list[Document],
+        sample_chunks: list[Document],
         mock_openai_api_key: str,
         mock_transcripts_dir: Path,
     ) -> None:

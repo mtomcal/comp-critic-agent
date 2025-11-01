@@ -31,6 +31,10 @@ class Config:
     # RAG Configuration
     RAG_TOP_K: int = int(os.getenv("RAG_TOP_K", "3"))
 
+    # Vision API Configuration
+    VISION_DETAIL: str = os.getenv("VISION_DETAIL", "low")  # "low" or "high"
+    VISION_MAX_SIZE: int = int(os.getenv("VISION_MAX_SIZE", "2048"))
+
     # ChromaDB Configuration
     COLLECTION_NAME: str = "landscape_photography_transcripts"
 
