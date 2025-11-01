@@ -1,0 +1,117 @@
+[tool.poetry]
+name = "comp-critic"
+version = "0.1.0"
+description = "AI agent that provides expert-level compositional critiques of landscape photographs"
+authors = ["Michael Tomcal"]
+readme = "README.md"
+packages = [{include = "comp_critic", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+langchain = "^0.3.0"
+langchain-openai = "^0.2.0"
+langchain-community = "^0.3.0"
+chromadb = "^0.5.0"
+pillow = "^11.0.0"
+python-dotenv = "^1.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.0"
+pytest-cov = "^6.0.0"
+pytest-mock = "^3.14.0"
+ruff = "^0.8.0"
+mypy = "^1.13.0"
+poethepoet = "^0.35.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poe.tasks]
+# Data ingestion task
+ingest = {cmd = "python -m comp_critic.ingest", help = "Run the transcript ingestion pipeline"}
+
+# Testing tasks
+test = {cmd = "pytest tests/ -v --cov=src/comp_critic --cov-report=term-missing", help = "Run tests with coverage"}
+test-fast = {cmd = "pytest tests/ -v", help = "Run tests without coverage"}
+
+# Code quality tasks
+lint = {cmd = "ruff check src tests", help = "Run linter on source and tests"}
+format = {cmd = "ruff format src tests", help = "Format code with Ruff"}
+format-check = {cmd = "ruff format --check src tests", help = "Check code formatting"}
+typecheck = {cmd = "mypy src", help = "Run static type checking"}
+
+# Combined quality check
+check-all = ["format-check", "lint", "typecheck", "test"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--strict-config",
+]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "slow: Slow-running tests",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "PTH", # flake8-use-pathlib
+]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]  # Allow assert in tests
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "chromadb.*",
+    "langchain.*",
+    "langchain_openai.*",
+]
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["*/tests/*", "*/__init__.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
