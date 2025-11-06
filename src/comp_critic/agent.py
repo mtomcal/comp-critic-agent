@@ -184,6 +184,7 @@ def critique_image(
     print("\nCalling LLM with vision...")
 
     # Iterative tool calling (max 3 iterations)
+    response = None
     for iteration in range(3):
         print(f"\nIteration {iteration + 1}...")
 
@@ -191,7 +192,7 @@ def critique_image(
         messages.append(response)
 
         # Check for tool calls - safe because response is always AIMessage from LLM
-        if not hasattr(response, "tool_calls") or not response.tool_calls:
+        if not isinstance(response, AIMessage) or not response.tool_calls:
             print("No tool calls - generating final response...")
             break
 
@@ -223,7 +224,7 @@ def critique_image(
 
     # Extract token usage if available
     token_info = {}
-    if hasattr(response, "usage_metadata") and response.usage_metadata:
+    if response and hasattr(response, "usage_metadata") and response.usage_metadata:
         usage = response.usage_metadata
         token_info = {
             "input_tokens": usage.get("input_tokens", 0),

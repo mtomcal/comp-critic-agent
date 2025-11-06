@@ -69,3 +69,4 @@ temp/
 sessions/
 
 transcripts/
+.memory.jsonl

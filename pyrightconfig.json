@@ -1,0 +1,11 @@
+{
+  "pythonVersion": "3.12",
+  "include": ["src", "tests"],
+  "exclude": ["__pycache__", ".pytest_cache"],
+  "venvPath": "/home/mtomcal/.cache/pypoetry/virtualenvs",
+  "venv": "comp-critic-sqXeqiU1-py3.12",
+  "reportMissingImports": false,
+  "reportMissingTypeStubs": false,
+  "typeCheckingMode": "off",
+  "stubPath": "./src"
+}
